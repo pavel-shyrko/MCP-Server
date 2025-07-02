@@ -1,15 +1,15 @@
 # MCP Server
 
-MCP Server is a backend application that enables secure and standardized communication between AI models and external resources, such as databases, APIs, and file systems. It acts as a bridge, allowing AI agents to interact with these resources in a controlled and efficient manner, expanding the capabilities of AI systems.
+MCP Server is a backend Python application that enables secure and standardized communication between AI models and external resources, such as databases, APIs, and file systems. It acts as a bridge, allowing AI agents to interact with these resources in a controlled and efficient manner, expanding the capabilities of AI systems.
 
-This application is built with Python and is designed for modularity and extensibility. It includes authentication, logging, and LLM (Large Language Model) agent integration, and is ready for deployment with Docker.
+This application has been fully reworked for modularity, extensibility, and maintainability. It features a plugin-based adapter system, robust authentication, logging, and seamless integration with LLM (Large Language Model) agents. The project is containerized for easy deployment.
 
-## Features
-- Modular design with adapters (e.g., booking)
-- Authentication support
-- LLM (Large Language Model) agent integration
-- Logging
-- Dockerized for easy deployment
+## Key Features
+- Modular adapter/plugin architecture for easy extension
+- Secure authentication mechanisms
+- LLM agent integration for advanced AI workflows
+- Centralized logging
+- Docker support for deployment
 
 ## Project Structure
 ```
@@ -19,13 +19,15 @@ requirements.txt          # Python dependencies
 app/
     __init__.py
     auth.py               # Authentication logic
+    config.py             # Configuration management
     llm_agent.py          # LLM agent integration
     logger.py             # Logging setup
     main.py               # Application entry point
     router.py             # API routing
-    adapters/
+    adapters/             # Adapter plugins for external resources
         __init__.py
-        booking.py        # Booking adapter
+        jsonplaceholder_comments.py
+        jsonplaceholder_post.py
 ```
 
 ## Getting Started
@@ -33,6 +35,7 @@ app/
 ### Prerequisites
 - Docker
 - Docker Compose
+- Python 3.10+
 
 ### Build and Run with Docker
 ```
@@ -50,7 +53,7 @@ docker-compose up --build
     ```
 
 ## Configuration
-- Environment variables and configuration can be set in the Docker Compose file or as needed in the code.
+- Configuration is managed via `app/config.py` and environment variables. Adjust as needed for your deployment.
 
 ## License
 
