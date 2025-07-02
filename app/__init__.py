@@ -1,1 +1,2 @@
-# Marks 'app' as a Python package
+# app/__init__.py
+# (this file can be empty)

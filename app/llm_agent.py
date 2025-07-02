@@ -1,68 +1,64 @@
-from langchain_ollama import ChatOllama
-from langchain.agents import Tool
-from langgraph.prebuilt import create_react_agent
 import json
+import httpx
 from app.logger import logger
+from app.config import settings
 
-# ——— Tool definition ———
-def booking_tool_func(input_data: str):
-    data = json.loads(input_data)
-    return f"Simulated booking API call with: {data}"
-
-booking_tool = Tool(
-    name="booking_tool",
-    func=booking_tool_func,
-    description="Used to book desks. Input is JSON with fields: action, date."
-)
-
-# ——— LLM client ———
-llm = ChatOllama(model="mistral", base_url="http://host.docker.internal:11434")
-
-# ——— Agent graph ———
-graph = create_react_agent(
-    model=llm,
-    tools=[booking_tool]
-)
-
-# ——— Unified interface ———
-def run_agent(query: str) -> str:
+async def run_agent(query: str) -> dict:
     """
-    Invoke the LangGraph agent and extract the textual output.
-    1) Если LLM возвращает plain string — сразу его.
-    2) Если dict с ключом 'messages' — собираем content.
-    3) Если messages есть, но все content пустые — сообщаем об этом.
-    4) Ищем ключи 'output', 'result', 'response', 'text'.
-    5) Иначе — human-friendly fallback.
+    1) Send system+user prompt to Ollama’s /api/chat.
+    2) Read and stitch the newline-delimited JSON chunks into one string.
+    3) Parse that string as {"tool": "...", "args": {...}}.
+    4) Normalize the tool name (underscore→hyphen) and call the matching /<tool>-call.
+    5) Return the adapter’s JSON response.
     """
+    payload = {
+        "model": "mistral",
+        "messages": [
+            {"role": "system", "content": settings.system_prompt},
+            {"role": "user",   "content": query},
+        ],
+    }
+
+    # 1) call Ollama
+    llm_base = str(settings.llm_base_url).rstrip("/")
+    chat_url = f"{llm_base}/api/chat"
+    logger.info(f"[AGENT] POST to Ollama at {chat_url} payload={payload!r}")
+
+    async with httpx.AsyncClient() as cli:
+        resp = await cli.post(chat_url, json=payload, timeout=30.0)
+        resp.raise_for_status()
+        raw = resp.text
+
+    # 2) stitch streaming chunks
+    contents = []
+    for line in raw.splitlines():
+        try:
+            chunk = json.loads(line)
+            part  = chunk.get("message", {}).get("content", "")
+            if part:
+                contents.append(part)
+        except json.JSONDecodeError:
+            logger.warning(f"[AGENT] Skipping unparseable line: {line!r}")
+
+    assistant_json_str = "".join(contents).strip()
+    logger.info(f"[AGENT] Full assistant JSON string: {assistant_json_str!r}")
+
+    # 3) parse tool + args
     try:
-        raw = graph.invoke({"input": query})
-        logger.info(f"[LLM_AGENT] raw graph response: {raw!r}")
-
-        # 1) Plain string
-        if isinstance(raw, str):
-            return raw
-
-        # 2) Dict with messages
-        if isinstance(raw, dict) and "messages" in raw:
-            msgs = raw["messages"]
-            # Collect non-empty contents
-            parts = [getattr(m, "content", "") for m in msgs]
-            nonempty = [p for p in parts if p.strip()]
-            if nonempty:
-                return "\n".join(nonempty)
-            # 3) messages present but empty
-            logger.warning("[LLM_AGENT] messages present but all content empty")
-            return "LLM returned no content."
-
-        # 4) Other common keys
-        if isinstance(raw, dict):
-            for key in ("output", "result", "response", "text"):
-                if key in raw and raw[key] not in (None, ""):
-                    return raw[key]
-
-        # 5) Fallback
-        return f"Unexpected response format: {raw}"
-
+        js   = json.loads(assistant_json_str)
+        tool = js["tool"]
+        args = js["args"]
     except Exception as exc:
-        logger.error("[LLM_AGENT] error invoking graph", exc_info=True)
-        return f"Error during agent execution: {exc}"
+        raise ValueError(f"Failed parsing tool JSON: {exc}: {assistant_json_str}")
+
+    # 4) normalize tool name (underscore → hyphen)
+    tool_path = tool.replace("_", "-")
+    local_base = str(settings.local_api_base).rstrip("/")
+    url = f"{local_base}/{tool_path}"
+    logger.info(f"[AGENT] Dispatching to {url} with args={args!r}")
+
+    # 5) call the adapter
+    async with httpx.AsyncClient() as cli:
+        tool_resp = await cli.post(url, json=args, timeout=30.0)
+        tool_resp.raise_for_status()
+        return tool_resp.json()

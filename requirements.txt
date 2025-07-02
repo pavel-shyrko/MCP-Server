@@ -1,7 +1,5 @@
 fastapi
 uvicorn[standard]
 httpx
-langgraph
-langgraph-prebuilt
-langchain-ollama
-langchain
+pydantic
+pydantic-settings

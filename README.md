@@ -54,7 +54,7 @@ docker-compose up --build
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](https://github.com/pavel-shyrko/MCP-Server/blob/main/LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/pavel-shyrko/MCP-Server/blob/master/LICENSE) file for details.
 
 ## Author
 Pavel Shyrko
