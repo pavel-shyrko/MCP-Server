@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException
 from pydantic import BaseModel, Field
 from app.logger import logger
 from app.config import settings, Settings
-from app.llm_agent import run_agent
+from app.llm_agent import run_agent, AgentError, LLMConnectionError, LLMResponseError, ToolDispatchError
 from app.adapters.jsonplaceholder_post      import handle_request as fetch_post
 from app.adapters.jsonplaceholder_comments  import handle_request as fetch_comments
 
@@ -75,10 +75,54 @@ async def ask_llm(request: QueryRequest, logger=Depends(get_logger)):
     4) Return the results
     """
     query = request.query
-    logger.info(f"[ASK] query={query!r}")
+    logger.info(f"[ASK] Processing query: {query!r}")
+
     try:
         result = await run_agent(query)
-        return {"result": result}
+        logger.info(f"[ASK] Query processed successfully")
+        return {"result": result, "status": "success"}
+
+    except LLMConnectionError as exc:
+        logger.error(f"[ASK] LLM connection error: {exc}")
+        return {
+            "error": "LLM service unavailable",
+            "details": str(exc),
+            "error_type": "llm_connection_error",
+            "status": "error"
+        }
+
+    except LLMResponseError as exc:
+        logger.error(f"[ASK] LLM response error: {exc}")
+        return {
+            "error": "Invalid response from LLM",
+            "details": str(exc),
+            "error_type": "llm_response_error",
+            "status": "error"
+        }
+
+    except ToolDispatchError as exc:
+        logger.error(f"[ASK] Tool dispatch error: {exc}")
+        return {
+            "error": "Tool execution failed",
+            "details": str(exc),
+            "error_type": "tool_dispatch_error",
+            "status": "error"
+        }
+
+    except AgentError as exc:
+        logger.error(f"[ASK] Agent error: {exc}")
+        return {
+            "error": "Agent execution failed",
+            "details": str(exc),
+            "error_type": "agent_error",
+            "status": "error"
+        }
+
     except Exception as exc:
-        logger.error(f"[ASK] error: {exc}", exc_info=True)
-        return {"error": str(exc)}
+        logger.error(f"[ASK] Unexpected error: {exc}", exc_info=True)
+        return {
+            "error": "Internal server error",
+            "details": "An unexpected error occurred while processing your request",
+            "error_type": "internal_error",
+            "status": "error"
+        }
