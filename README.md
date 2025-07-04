@@ -151,6 +151,89 @@ Key configuration options:
 - `local_api_base` - This application's base URL
 - `jsonplaceholder_base_url` - External API endpoint
 
+## OpenTelemetry Integration
+
+The application includes structured JSON logging with OpenTelemetry correlation for distributed tracing and monitoring.
+
+### Structured JSON Logs
+
+All log messages are output as structured JSON with the following fields:
+```json
+{
+  "timestamp": "2025-07-04T16:11:10.600Z",
+  "severity": "INFO", 
+  "service": "mcp-server",
+  "TraceId": "980434f67476db79",
+  "SpanId": "980434f67476db79", 
+  "ParentId": "",
+  "name": "llm-agent",
+  "message": "Starting agent execution for query: 'Get me post number two'"
+}
+```
+
+### OpenTelemetry Features
+
+- **Automatic trace correlation** - TraceId and SpanId automatically added to all logs
+- **Span hierarchy** - ParentId shows parent-child span relationships  
+- **Distributed tracing** - Full request tracing across all components:
+  - Router endpoints (`/ask`, `/post-call`, `/comments-call`)
+  - LLM agent orchestration
+  - External API calls (Ollama, JSONPlaceholder)
+  - Adapter operations
+- **Error tracking** - Span status and error details in traces
+- **Performance monitoring** - Span timing and attributes
+
+### Environment Configuration
+
+OpenTelemetry is configured via environment variables:
+
+```bash
+# Enable log correlation (automatically adds TraceId/SpanId to logs)
+OTEL_PYTHON_LOG_CORRELATION=true
+
+# Set service name for traces and logs
+OTEL_SERVICE_NAME=mcp-server
+
+# Set log level
+LOG_LEVEL=INFO
+```
+
+These are automatically set in `.env.local` and `.env.docker` files.
+
+### Trace Spans
+
+The application creates detailed spans for:
+
+1. **HTTP Requests** (`router.*`)
+   - Request processing and validation
+   - Error handling with span status
+
+2. **Agent Operations** (`agent.*`) 
+   - LLM query processing
+   - Tool selection and dispatch
+   - Response parsing
+
+3. **External API Calls** (`adapter.*`)
+   - Post and comment fetching
+   - HTTP request details and timing
+
+4. **LLM Integration** (`agent.ollama_request`)
+   - Model interactions
+   - Response processing
+
+### Testing
+
+Run OpenTelemetry logging tests:
+```bash
+python -m pytest test_otel_logging.py -v
+```
+
+Tests verify:
+- JSON log format validity
+- OpenTelemetry field population
+- Parent-child span relationships
+- Error span status tracking
+
 ## Architecture Patterns
 
 - **Dependency Injection** - FastAPI's `Depends()` system for settings and logging

@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
 from pydantic import BaseModel, Field
-from app.logger import logger
+from opentelemetry import trace
+from app.logger import get_logger as get_app_logger
 from app.config import settings, Settings
 from app.llm_agent import run_agent, AgentError, LLMConnectionError, LLMResponseError, ToolDispatchError
 from app.adapters.jsonplaceholder_post      import handle_request as fetch_post
 from app.adapters.jsonplaceholder_comments  import handle_request as fetch_comments
+
+# Get tracer and logger
+tracer = trace.get_tracer(__name__)
+logger = get_app_logger("router")
 
 class QueryRequest(BaseModel):
     query: str = Field(..., example="Get me post number two", description="Natural language query for the AI agent")
@@ -18,13 +23,13 @@ class CommentsRequest(BaseModel):
 def get_settings() -> Settings:
     return settings
 
-def get_logger():
-    return logger
+def get_router_logger():
+    return get_app_logger("router")
 
 router = APIRouter()
 
 @router.post(f"/{settings.post_tool_path}", tags=["Tool API"])
-async def post_call(request: PostRequest, settings: Settings = Depends(get_settings), logger=Depends(get_logger)):
+async def post_call(request: PostRequest, settings: Settings = Depends(get_settings), logger=Depends(get_router_logger)):
     """
     Tool #1: Fetch a post from JSONPlaceholder by ID.
 
@@ -33,12 +38,15 @@ async def post_call(request: PostRequest, settings: Settings = Depends(get_setti
     {"post_id": 2}
     ```
     """
-    data = request.dict()
-    logger.info(f"[POST-CALL] args={data!r}")
-    return await fetch_post(data)
+    with tracer.start_as_current_span("router.post_call") as span:
+        data = request.dict()
+        span.set_attribute("tool.name", "post_call")
+        span.set_attribute("post.id", data.get("post_id"))
+        logger.info(f"args={data!r}")
+        return await fetch_post(data)
 
 @router.post(f"/{settings.comments_tool_path}", tags=["Tool API"])
-async def comments_call(request: CommentsRequest, settings: Settings = Depends(get_settings), logger=Depends(get_logger)):
+async def comments_call(request: CommentsRequest, settings: Settings = Depends(get_settings), logger=Depends(get_router_logger)):
     """
     Tool #2: Fetch comments for a given post ID.
 
@@ -47,12 +55,15 @@ async def comments_call(request: CommentsRequest, settings: Settings = Depends(g
     {"post_id": 2}
     ```
     """
-    data = request.dict()
-    logger.info(f"[COMMENTS-CALL] args={data!r}")
-    return await fetch_comments(data)
+    with tracer.start_as_current_span("router.comments_call") as span:
+        data = request.dict()
+        span.set_attribute("tool.name", "comments_call")
+        span.set_attribute("post.id", data.get("post_id"))
+        logger.info(f"args={data!r}")
+        return await fetch_comments(data)
 
 @router.post("/ask", tags=["Agent"])
-async def ask_llm(request: QueryRequest, logger=Depends(get_logger)):
+async def ask_llm(request: QueryRequest, logger=Depends(get_router_logger)):
     """
     Agent endpoint: Ask the AI agent to perform tasks using available tools.
 
@@ -74,55 +85,68 @@ async def ask_llm(request: QueryRequest, logger=Depends(get_logger)):
     3) Execute the appropriate tool with the correct parameters
     4) Return the results
     """
-    query = request.query
-    logger.info(f"[ASK] Processing query: {query!r}")
+    with tracer.start_as_current_span("router.ask_llm") as span:
+        query = request.query
+        span.set_attribute("user.query", query)
+        logger.info(f"Processing query: {query!r}")
 
-    try:
-        result = await run_agent(query)
-        logger.info(f"[ASK] Query processed successfully")
-        return {"result": result, "status": "success"}
+        try:
+            result = await run_agent(query)
+            span.set_attribute("request.success", True)
+            logger.info(f"Query processed successfully")
+            return {"result": result, "status": "success"}
 
-    except LLMConnectionError as exc:
-        logger.error(f"[ASK] LLM connection error: {exc}")
-        return {
-            "error": "LLM service unavailable",
-            "details": str(exc),
-            "error_type": "llm_connection_error",
-            "status": "error"
-        }
+        except LLMConnectionError as exc:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, "LLM connection error"))
+            span.set_attribute("error.type", "llm_connection_error")
+            logger.error(f"LLM connection error: {exc}")
+            return {
+                "error": "LLM service unavailable",
+                "details": str(exc),
+                "error_type": "llm_connection_error",
+                "status": "error"
+            }
 
-    except LLMResponseError as exc:
-        logger.error(f"[ASK] LLM response error: {exc}")
-        return {
-            "error": "Invalid response from LLM",
-            "details": str(exc),
-            "error_type": "llm_response_error",
-            "status": "error"
-        }
+        except LLMResponseError as exc:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, "LLM response error"))
+            span.set_attribute("error.type", "llm_response_error")
+            logger.error(f"LLM response error: {exc}")
+            return {
+                "error": "Invalid response from LLM",
+                "details": str(exc),
+                "error_type": "llm_response_error",
+                "status": "error"
+            }
 
-    except ToolDispatchError as exc:
-        logger.error(f"[ASK] Tool dispatch error: {exc}")
-        return {
-            "error": "Tool execution failed",
-            "details": str(exc),
-            "error_type": "tool_dispatch_error",
-            "status": "error"
-        }
+        except ToolDispatchError as exc:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, "Tool dispatch error"))
+            span.set_attribute("error.type", "tool_dispatch_error")
+            logger.error(f"Tool dispatch error: {exc}")
+            return {
+                "error": "Tool execution failed",
+                "details": str(exc),
+                "error_type": "tool_dispatch_error",
+                "status": "error"
+            }
 
-    except AgentError as exc:
-        logger.error(f"[ASK] Agent error: {exc}")
-        return {
-            "error": "Agent execution failed",
-            "details": str(exc),
-            "error_type": "agent_error",
-            "status": "error"
-        }
+        except AgentError as exc:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, "Agent error"))
+            span.set_attribute("error.type", "agent_error")
+            logger.error(f"Agent error: {exc}")
+            return {
+                "error": "Agent execution failed",
+                "details": str(exc),
+                "error_type": "agent_error",
+                "status": "error"
+            }
 
-    except Exception as exc:
-        logger.error(f"[ASK] Unexpected error: {exc}", exc_info=True)
-        return {
-            "error": "Internal server error",
-            "details": "An unexpected error occurred while processing your request",
-            "error_type": "internal_error",
-            "status": "error"
-        }
+        except Exception as exc:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, "Internal error"))
+            span.set_attribute("error.type", "internal_error")
+            logger.error(f"Unexpected error: {exc}", exc_info=True)
+            return {
+                "error": "Internal server error",
+                "details": "An unexpected error occurred while processing your request",
+                "error_type": "internal_error",
+                "status": "error"
+            }
