@@ -1,5 +1,8 @@
 from pydantic_settings import BaseSettings
 from pydantic import AnyHttpUrl
+import os
+import sys
+from pathlib import Path
 
 class Settings(BaseSettings):
     """
@@ -14,21 +17,32 @@ class Settings(BaseSettings):
     # Paths for our two tools
     post_tool_path: str = "post-call"
     comments_tool_path: str = "comments-call"
-    system_prompt: str = """
-    You have two tools you can call:
-    1) post_call — Fetch a post. Args schema: {"post_id": <integer>}.
-    2) comments_call — Fetch comments for a post. Args schema: {"post_id": <integer>}.
 
-    When the user asks for information:
-    - Output *only* valid JSON with exactly keys "tool" and "args".
-    - "tool" must be either "post_call" or "comments_call".
-    - "args" must follow the schema above.
-
-    Do not output any extra text, only the JSON.
-    """
+    @property
+    def system_prompt(self) -> str:
+        """Load system prompt from file"""
+        prompt_file = Path(__file__).parent / "prompts" / "system_prompt.txt"
+        return prompt_file.read_text(encoding="utf-8").strip()
 
     class Config:
-        env_file = ".env"
+        # Check for --env-file argument first, then ENV_FILE, then default
+        env_file = None
         env_file_encoding = "utf-8"
+
+        @classmethod
+        def customise_sources(cls, init_settings, env_settings, file_settings):
+            # Check command line arguments for --env-file
+            env_file = ".env.local"  # default
+            if "--env-file" in sys.argv:
+                try:
+                    idx = sys.argv.index("--env-file")
+                    env_file = sys.argv[idx + 1]
+                except (IndexError, ValueError):
+                    pass
+            else:
+                env_file = os.getenv("ENV_FILE", ".env.local")
+
+            cls.env_file = env_file
+            return init_settings, env_settings, file_settings
 
 settings = Settings()

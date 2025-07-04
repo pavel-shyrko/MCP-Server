@@ -22,5 +22,8 @@ COPY --from=builder /install /usr/local
 # Copy application code
 COPY --from=builder /build/app ./app
 
-# Run app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Copy only Docker config
+COPY .env.docker ./
+
+# Run app with Docker config
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--env-file", ".env.docker"]

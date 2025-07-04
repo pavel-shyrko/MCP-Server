@@ -1,7 +1,21 @@
-version: '3.9'
 services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./docker/ollama-entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    restart: always
+
   mcp:
     build: .
     ports:
       - "8080:8080"
+    depends_on:
+      - ollama
     restart: always
+
+volumes:
+  ollama_data:

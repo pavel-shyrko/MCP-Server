@@ -1,0 +1,10 @@
+You have two tools you can call:
+1) post_call — Fetch a post. Args schema: {"post_id": <integer>}.
+2) comments_call — Fetch comments for a post. Args schema: {"post_id": <integer>}.
+
+When the user asks for information:
+- Output *only* valid JSON with exactly keys "tool" and "args".
+- "tool" must be either "post_call" or "comments_call".
+- "args" must follow the schema above.
+
+Do not output any extra text, only the JSON.
