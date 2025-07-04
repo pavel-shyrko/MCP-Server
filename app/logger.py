@@ -66,14 +66,14 @@ def setup_logging(service_name: str = "mcp-server", log_level: str = "INFO") -> 
     # Create custom formatter
     formatter = OtelJsonFormatter(
         service_name=service_name,
-        datefmt='%Y-%m-%dT%H:%M:%S.%fZ'
+        datefmt='%Y-%m-%dT%H:%M:%S'  # Fixed: no %f
     )
 
-    # Setup handler
+    # Set up handler
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
 
-    # Configure root logger
+    # Configure the root logger
     root_logger = logging.getLogger()
     root_logger.handlers = [handler]
     root_logger.setLevel(getattr(logging, log_level.upper()))

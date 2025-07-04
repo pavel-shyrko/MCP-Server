@@ -5,15 +5,10 @@ from fastapi.testclient import TestClient
 from fastapi import FastAPI
 from app.router import router, QueryRequest, PostRequest, CommentsRequest
 from app.llm_agent import LLMConnectionError, LLMResponseError, ToolDispatchError
-import warnings
-
-# Suppress specific warnings for tests
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
 # Create a test app for testing
-test_app = FastAPI()
-test_app.include_router(router)
+fastapi_app = FastAPI()
+fastapi_app.include_router(router)
 
 
 class TestRouter(unittest.TestCase):
@@ -21,7 +16,7 @@ class TestRouter(unittest.TestCase):
 
     def setUp(self):
         """Setup test environment"""
-        self.client = TestClient(test_app)
+        self.client = TestClient(fastapi_app)
 
     @patch('app.router.fetch_post')
     def test_post_call_endpoint(self, mock_fetch_post):

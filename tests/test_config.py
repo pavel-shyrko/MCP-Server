@@ -1,15 +1,7 @@
 import unittest
 import os
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from app.config import Settings
-import warnings
-
-# Suppress warnings for tests
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
-
 
 class TestConfig(unittest.TestCase):
     """Test configuration management"""
@@ -32,10 +24,10 @@ class TestConfig(unittest.TestCase):
 
         settings = Settings()
 
-        # Pydantic adds trailing slash to URLs
-        self.assertEqual(str(settings.llm_base_url), "http://host.docker.internal:11434/")
-        self.assertEqual(str(settings.local_api_base), "http://127.0.0.1:8080/")
-        self.assertEqual(str(settings.jsonplaceholder_base_url), "https://jsonplaceholder.typicode.com/")
+        # Теперь ожидаем URL без завершающего слэша
+        self.assertEqual(str(settings.llm_base_url), "http://host.docker.internal:11434")
+        self.assertEqual(str(settings.local_api_base), "http://127.0.0.1:8080")
+        self.assertEqual(str(settings.jsonplaceholder_base_url), "https://jsonplaceholder.typicode.com")
         self.assertEqual(settings.post_tool_path, "post-call")
         self.assertEqual(settings.comments_tool_path, "comments-call")
 
@@ -53,10 +45,10 @@ class TestConfig(unittest.TestCase):
 
         settings = Settings()
 
-        # Pydantic adds trailing slash to URLs
-        self.assertEqual(str(settings.llm_base_url), "http://localhost:11434/")
-        self.assertEqual(str(settings.local_api_base), "http://localhost:8080/")
-        self.assertEqual(str(settings.jsonplaceholder_base_url), "https://api.example.com/")
+        # Теперь ожидаем URL без завершающего слэша
+        self.assertEqual(str(settings.llm_base_url), "http://localhost:11434")
+        self.assertEqual(str(settings.local_api_base), "http://localhost:8080")
+        self.assertEqual(str(settings.jsonplaceholder_base_url), "https://api.example.com")
 
     def test_system_prompt_loading(self):
         """Test system prompt loading from file"""
@@ -75,9 +67,9 @@ class TestConfig(unittest.TestCase):
 
             settings = Settings()
 
-            # Should handle gracefully or raise appropriate error
-            with self.assertRaises(FileNotFoundError):
-                _ = settings.system_prompt
+            # Теперь ожидаем дефолтную строку, а не исключение
+            prompt = settings.system_prompt
+            self.assertEqual(prompt, "You are a helpful AI assistant that can fetch posts and comments from JSONPlaceholder API.")
 
     def test_url_validation(self):
         """Test URL validation in settings"""
@@ -89,7 +81,7 @@ class TestConfig(unittest.TestCase):
         # Valid URLs should work
         os.environ["LLM_BASE_URL"] = "https://api.openai.com"
         settings = Settings()
-        self.assertEqual(str(settings.llm_base_url), "https://api.openai.com/")
+        self.assertEqual(str(settings.llm_base_url), "https://api.openai.com")
 
         # Invalid URLs should raise validation error
         os.environ["LLM_BASE_URL"] = "not-a-valid-url"

@@ -37,12 +37,17 @@ async def run_agent(query: str) -> Dict[str, Any]:
         span.set_attribute("agent.query", query)
         logger.info(f"Starting agent execution for query: {query!r}")
 
+        # Prepare the payload for Ollama’s chat endpoint
         payload = {
             "model": "mistral",
             "messages": [
                 {"role": "system", "content": settings.system_prompt},
-                {"role": "user",   "content": query},
+                {"role": "user", "content": query},
             ],
+            # session_id ensures Ollama keeps a separate context/KV‐cache for each user.
+            # You should generate or retrieve a unique ID per client (e.g. from a login session or cookie),
+            # and then reuse that same session_id on every request for that user.
+            "session_id": user_session_id
         }
 
         # 1) call Ollama with error handling

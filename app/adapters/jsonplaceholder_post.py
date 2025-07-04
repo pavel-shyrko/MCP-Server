@@ -64,6 +64,8 @@ async def handle_request(data: dict) -> dict:
             span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
             logger.error(f"Network error fetching post {post_id}: {exc}")
             raise RuntimeError(f"Network error while fetching post {post_id}: {exc}")
+        except (ValueError, TypeError, RuntimeError):
+            raise  # propagate as is so tests can catch the correct type
         except Exception as exc:
             span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
             logger.error(f"Unexpected error fetching post {post_id}: {exc}", exc_info=True)

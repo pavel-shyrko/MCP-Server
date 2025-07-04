@@ -2,18 +2,10 @@ import unittest
 import json
 import logging
 from io import StringIO
-from unittest.mock import patch, MagicMock
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 from app.logger import setup_logging, get_logger, OtelJsonFormatter
-import warnings
-
-# Suppress OpenTelemetry and logging warnings for tests
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
-warnings.filterwarnings("ignore", module="opentelemetry")
-
 
 class TestOpenTelemetryLogging(unittest.TestCase):
     """Test OpenTelemetry integration with structured JSON logging"""

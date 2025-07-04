@@ -8,6 +8,13 @@ services:
       - ./docker/ollama-entrypoint.sh:/entrypoint.sh:ro
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
     restart: always
+    environment:
+      # Maximum context length (in tokens) for the Mistral model
+      - OLLAMA_CONTEXT_LENGTH=32768
+      # How long the model runner stays alive (and retains context) after the last request
+      - OLLAMA_KEEP_ALIVE=1h
+      # Enable shared KV-cache for identical prefixes (your system prompt) across sessions
+      - OLLAMA_MULTIUSER_CACHE=true
 
   mcp:
     build: .

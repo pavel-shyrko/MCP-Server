@@ -1,5 +1,4 @@
 import unittest
-import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 import httpx
 from app.llm_agent import (
@@ -9,18 +8,11 @@ from app.llm_agent import (
     LLMResponseError,
     ToolDispatchError
 )
-import warnings
 
-# Suppress warnings for tests
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
-
-
-class TestLLMAgent(unittest.TestCase):
+class TestLLMAgent(unittest.IsolatedAsyncioTestCase):
     """Test LLM Agent functionality"""
 
     def setUp(self):
-        """Setup test environment"""
         self.test_query = "Get me post number two"
         self.mock_settings = MagicMock()
         self.mock_settings.system_prompt = "Test system prompt"
@@ -29,9 +21,7 @@ class TestLLMAgent(unittest.TestCase):
 
     @patch('app.llm_agent.settings')
     @patch('app.llm_agent.httpx.AsyncClient')
-    @pytest.mark.asyncio
     async def test_successful_agent_execution(self, mock_client, mock_settings):
-        """Test successful agent execution flow"""
         mock_settings.return_value = self.mock_settings
 
         # Mock Ollama response
@@ -58,9 +48,7 @@ class TestLLMAgent(unittest.TestCase):
 
     @patch('app.llm_agent.settings')
     @patch('app.llm_agent.httpx.AsyncClient')
-    @pytest.mark.asyncio
     async def test_llm_connection_error(self, mock_client, mock_settings):
-        """Test LLM connection error handling"""
         mock_settings.return_value = self.mock_settings
 
         mock_client_instance = AsyncMock()
@@ -74,9 +62,7 @@ class TestLLMAgent(unittest.TestCase):
 
     @patch('app.llm_agent.settings')
     @patch('app.llm_agent.httpx.AsyncClient')
-    @pytest.mark.asyncio
     async def test_invalid_llm_response(self, mock_client, mock_settings):
-        """Test invalid LLM response handling"""
         mock_settings.return_value = self.mock_settings
 
         # Mock invalid JSON response
@@ -96,9 +82,7 @@ class TestLLMAgent(unittest.TestCase):
 
     @patch('app.llm_agent.settings')
     @patch('app.llm_agent.httpx.AsyncClient')
-    @pytest.mark.asyncio
     async def test_tool_dispatch_error(self, mock_client, mock_settings):
-        """Test tool dispatch error handling"""
         mock_settings.return_value = self.mock_settings
 
         # Mock valid Ollama response
@@ -122,9 +106,7 @@ class TestLLMAgent(unittest.TestCase):
 
     @patch('app.llm_agent.settings')
     @patch('app.llm_agent.httpx.AsyncClient')
-    @pytest.mark.asyncio
     async def test_empty_llm_response(self, mock_client, mock_settings):
-        """Test empty LLM response handling"""
         mock_settings.return_value = self.mock_settings
 
         mock_ollama_response = MagicMock()
@@ -143,9 +125,7 @@ class TestLLMAgent(unittest.TestCase):
 
     @patch('app.llm_agent.settings')
     @patch('app.llm_agent.httpx.AsyncClient')
-    @pytest.mark.asyncio
     async def test_missing_tool_field(self, mock_client, mock_settings):
-        """Test missing tool field in LLM response"""
         mock_settings.return_value = self.mock_settings
 
         mock_ollama_response = MagicMock()
@@ -161,7 +141,6 @@ class TestLLMAgent(unittest.TestCase):
             await run_agent(self.test_query)
 
         self.assertIn("Missing 'tool' key in response", str(context.exception))
-
 
 if __name__ == '__main__':
     unittest.main()

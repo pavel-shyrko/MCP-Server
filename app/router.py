@@ -12,13 +12,13 @@ tracer = trace.get_tracer(__name__)
 logger = get_app_logger("router")
 
 class QueryRequest(BaseModel):
-    query: str = Field(..., example="Get me post number two", description="Natural language query for the AI agent")
+    query: str = Field(..., description="Natural language query for the AI agent", json_schema_extra={"example": "Get me post number two"})
 
 class PostRequest(BaseModel):
-    post_id: int = Field(..., example=2, description="ID of the post to fetch")
+    post_id: int = Field(..., description="ID of the post to fetch", json_schema_extra={"example": 2})
 
 class CommentsRequest(BaseModel):
-    post_id: int = Field(..., example=2, description="ID of the post to fetch comments for")
+    post_id: int = Field(..., description="ID of the post to fetch comments for", json_schema_extra={"example": 2})
 
 def get_settings() -> Settings:
     return settings
@@ -39,11 +39,22 @@ async def post_call(request: PostRequest, settings: Settings = Depends(get_setti
     ```
     """
     with tracer.start_as_current_span("router.post_call") as span:
-        data = request.dict()
-        span.set_attribute("tool.name", "post_call")
-        span.set_attribute("post.id", data.get("post_id"))
-        logger.info(f"args={data!r}")
-        return await fetch_post(data)
+        try:
+            data = request.model_dump()  # was request.dict()
+            span.set_attribute("tool.name", "post_call")
+            span.set_attribute("post.id", data.get("post_id"))
+            logger.info(f"Fetching post with args={data!r}")
+
+            result = await fetch_post(data)
+            span.set_attribute("request.success", True)
+            logger.info(f"Successfully fetched post {data.get('post_id')}")
+            return result
+
+        except Exception as exc:
+            span.set_status(trace.status.Status(trace.status.StatusCode.ERROR))
+            span.record_exception(exc)
+            logger.error(f"Error fetching post: {exc}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to fetch post: {str(exc)}")
 
 @router.post(f"/{settings.comments_tool_path}", tags=["Tool API"])
 async def comments_call(request: CommentsRequest, settings: Settings = Depends(get_settings), logger=Depends(get_router_logger)):
@@ -56,11 +67,22 @@ async def comments_call(request: CommentsRequest, settings: Settings = Depends(g
     ```
     """
     with tracer.start_as_current_span("router.comments_call") as span:
-        data = request.dict()
-        span.set_attribute("tool.name", "comments_call")
-        span.set_attribute("post.id", data.get("post_id"))
-        logger.info(f"args={data!r}")
-        return await fetch_comments(data)
+        try:
+            data = request.model_dump()  # was request.dict()
+            span.set_attribute("tool.name", "comments_call")
+            span.set_attribute("post.id", data.get("post_id"))
+            logger.info(f"Fetching comments with args={data!r}")
+
+            result = await fetch_comments(data)
+            span.set_attribute("request.success", True)
+            logger.info(f"Successfully fetched comments for post {data.get('post_id')}")
+            return result
+
+        except Exception as exc:
+            span.set_status(trace.status.Status(trace.status.StatusCode.ERROR))
+            span.record_exception(exc)
+            logger.error(f"Error fetching comments: {exc}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to fetch comments: {str(exc)}")
 
 @router.post("/ask", tags=["Agent"])
 async def ask_llm(request: QueryRequest, logger=Depends(get_router_logger)):
