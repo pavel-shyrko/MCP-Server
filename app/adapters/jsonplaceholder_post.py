@@ -31,7 +31,8 @@ async def handle_request(data: dict) -> dict:
         logger.info(f"Fetching post {post_id} from {url}")
 
         try:
-            async with httpx.AsyncClient() as client:
+            # Disable SSL verification for development (Windows certificate issues)
+            async with httpx.AsyncClient(verify=False) as client:
                 resp = await client.get(url, timeout=5.0)
 
                 span.set_attribute("http.status_code", resp.status_code)
