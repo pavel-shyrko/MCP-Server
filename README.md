@@ -79,6 +79,24 @@ docs/
 ## Quick Start
 
 ### Local Development
+
+**Windows (PowerShell):**
+```powershell
+# Install dependencies (use py launcher on Windows)
+py -m pip install -r requirements.txt
+
+# Install Ollama (if not already installed)
+# Download from: https://ollama.ai/download
+
+# Setup Ollama with mistral model
+ollama pull mistral
+ollama run mistral
+
+# Run the application
+py -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload --env-file .env.local
+```
+
+**Linux/macOS:**
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -169,15 +187,28 @@ The application uses Docker volumes for persistent data:
 
 **Common Issues:**
 
-1. **"Name or service not known" in Docker**
+1. **"pip is not recognized" or "uvicorn is not recognized" on Windows**
+   - Use `py -m pip` instead of `pip`
+   - Use `py -m uvicorn` instead of `uvicorn`
+   - Use `py` instead of `python`
+   - This is the recommended approach on Windows with Python Launcher
+
+2. **SSL Certificate verification failed (Windows)**
+   - Error: `[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed`
+   - **Solution 1**: Update certificates: `py -m pip install --upgrade certifi`
+   - **Solution 2**: Set environment variable: `$env:PYTHONHTTPSVERIFY="0"` (PowerShell) or `set PYTHONHTTPSVERIFY=0` (CMD)
+   - **Solution 3**: For corporate networks, contact IT for proper certificate configuration
+   - **Note**: The current code has `verify=False` in httpx clients for development purposes
+
+3. **"Name or service not known" in Docker**
    - Use `docker-compose up` to start all services together
    - Ensure .env.docker uses correct service names
 
-2. **Ollama connection refused**
+4. **Ollama connection refused**
    - **Local**: Ensure `ollama run mistral` is running
    - **Docker**: Wait for mistral model download (check logs)
 
-3. **Model not found errors**
+5. **Model not found errors**
    - **Local**: Run `ollama pull mistral`
    - **Docker**: Restart services if download failed
 

@@ -8,7 +8,8 @@ async def handle_request(data: dict) -> list:
     """
     post_id = data.get("post_id")
     url = f"{settings.jsonplaceholder_base_url}/comments"
-    async with httpx.AsyncClient() as client:
+    # Disable SSL verification for development (Windows certificate issues)
+    async with httpx.AsyncClient(verify=False) as client:
         resp = await client.get(url, params={"postId": post_id}, timeout=5.0)
         resp.raise_for_status()
         return resp.json()
