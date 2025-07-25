@@ -1,6 +1,7 @@
 import json
 import httpx
-from typing import Dict, Any
+import uuid
+from typing import Dict, Any, Optional
 from opentelemetry import trace
 from app.logger import get_logger
 from app.config import settings
@@ -8,6 +9,28 @@ from app.config import settings
 # Get tracer and logger
 tracer = trace.get_tracer(__name__)
 logger = get_logger("llm-agent")
+
+# Simple in-memory session store (in production, use Redis or database)
+_session_store: Dict[str, dict] = {}
+
+def create_session_id() -> str:
+    """Generate a new unique session ID"""
+    session_id = str(uuid.uuid4())
+    _session_store[session_id] = {
+        "created_at": "now",  # In production, use proper timestamp
+        "last_used": "now"
+    }
+    logger.info(f"Created new session: {session_id}")
+    return session_id
+
+def get_or_create_session(session_id: Optional[str] = None) -> str:
+    """Get existing session or create a new one"""
+    if session_id and session_id in _session_store:
+        _session_store[session_id]["last_used"] = "now"
+        logger.debug(f"Using existing session: {session_id}")
+        return session_id
+    else:
+        return create_session_id()
 
 class AgentError(Exception):
     """Base exception for agent-related errors"""
@@ -25,28 +48,31 @@ class ToolDispatchError(AgentError):
     """Error dispatching to tool"""
     pass
 
-async def run_agent(query: str) -> Dict[str, Any]:
+async def run_agent(query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
     """
-    1) Send system+user prompt to Ollama's /api/chat.
+    1) Send system+user prompt to Ollama's /api/chat with session management.
     2) Read and stitch the newline-delimited JSON chunks into one string.
     3) Parse that string as {"tool": "...", "args": {...}}.
     4) Normalize the tool name (underscore→hyphen) and call the matching /<tool>-call.
-    5) Return the adapter's JSON response.
+    5) Return the adapter's JSON response along with session_id.
     """
     with tracer.start_as_current_span("agent.run_agent") as span:
         span.set_attribute("agent.query", query)
-        logger.info(f"Starting agent execution for query: {query!r}")
+        
+        # Get or create session ID for this user
+        user_session_id = get_or_create_session(session_id)
+        span.set_attribute("agent.session_id", user_session_id)
+        
+        logger.info(f"Starting agent execution for query: {query!r} with session: {user_session_id}")
 
-        # Prepare the payload for Ollama’s chat endpoint
+        # Prepare the payload for Ollama's chat endpoint
         payload = {
             "model": "mistral",
             "messages": [
                 {"role": "system", "content": settings.system_prompt},
                 {"role": "user", "content": query},
             ],
-            # session_id ensures Ollama keeps a separate context/KV‐cache for each user.
-            # You should generate or retrieve a unique ID per client (e.g. from a login session or cookie),
-            # and then reuse that same session_id on every request for that user.
+            # session_id ensures Ollama keeps a separate context/KV‐cache for each user
             "session_id": user_session_id
         }
 
@@ -192,7 +218,11 @@ async def run_agent(query: str) -> Dict[str, Any]:
                     logger.info(f"Tool execution successful, result type: {type(result).__name__}")
                     logger.debug(f"Tool result: {result}")
 
-                    return result
+                    # Return both the result and the session_id for the client
+                    return {
+                        "result": result,
+                        "session_id": user_session_id
+                    }
 
             except httpx.TimeoutException as exc:
                 dispatch_span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))

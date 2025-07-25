@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
 from pydantic import BaseModel, Field
+from typing import Optional
 from opentelemetry import trace
 from app.logger import get_logger as get_app_logger
 from app.config import settings, Settings
@@ -13,6 +14,7 @@ logger = get_app_logger("router")
 
 class QueryRequest(BaseModel):
     query: str = Field(..., description="Natural language query for the AI agent", json_schema_extra={"example": "Get me post number two"})
+    session_id: Optional[str] = Field(None, description="Optional session ID to maintain conversation context", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
 
 class PostRequest(BaseModel):
     post_id: int = Field(..., description="ID of the post to fetch", json_schema_extra={"example": 2})
@@ -113,10 +115,14 @@ async def ask_llm(request: QueryRequest, logger=Depends(get_router_logger)):
         logger.info(f"Processing query: {query!r}")
 
         try:
-            result = await run_agent(query)
+            result = await run_agent(query, request.session_id)
             span.set_attribute("request.success", True)
-            logger.info(f"Query processed successfully")
-            return {"result": result, "status": "success"}
+            logger.info(f"Query processed successfully with session: {result.get('session_id')}")
+            return {
+                "result": result["result"], 
+                "session_id": result["session_id"],
+                "status": "success"
+            }
 
         except LLMConnectionError as exc:
             span.set_status(trace.Status(trace.StatusCode.ERROR, "LLM connection error"))

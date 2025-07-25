@@ -125,6 +125,23 @@ docker-compose up --build
 
 ## API Usage
 
+### Session Management
+
+The MCP Server implements session management to maintain conversation context across multiple requests:
+
+- **First Request**: Send a query without `session_id`. The server will create a new session and return it.
+- **Subsequent Requests**: Include the `session_id` from the previous response to maintain context.
+- **Session Storage**: Currently uses in-memory storage (for production, use Redis or database).
+
+**Response Format:**
+```json
+{
+  "result": { /* your data */ },
+  "session_id": "123e4567-e89b-12d3-a456-426614174000",
+  "status": "success"
+}
+```
+
 ### Interactive Documentation
 - **Local**: http://127.0.0.1:8080/docs
 - **Docker**: http://localhost:8080/docs
@@ -138,10 +155,10 @@ curl -X POST http://localhost:8080/ask \
   -H "Content-Type: application/json" \
   -d '{"query":"Get me post number two"}'
 
-# Get comments for that post
+# Continue conversation with session context (use session_id from previous response)
 curl -X POST http://localhost:8080/ask \
   -H "Content-Type: application/json" \
-  -d '{"query":"Now show me all comments for that post"}'
+  -d '{"query":"Now show me all comments for that post", "session_id":"123e4567-e89b-12d3-a456-426614174000"}'
 ```
 
 **Direct tool calls:**
@@ -241,7 +258,12 @@ The application creates detailed spans for:
 
 ### Testing
 
-Run OpenTelemetry logging tests:
+**Windows (PowerShell):**
+```powershell
+py -m pytest test_otel_logging.py -v
+```
+
+**Linux/macOS:**
 ```bash
 python -m pytest test_otel_logging.py -v
 ```
@@ -294,6 +316,11 @@ The application uses Docker volumes for persistent data:
 5. **Model not found errors**
    - **Local**: Run `ollama pull mistral`
    - **Docker**: Restart services if download failed
+
+6. **NameError: name 'user_session_id' is not defined**
+   - This occurs after merging branches or incomplete code updates
+   - **Solution**: The session_id field has been removed from LLM payload for demo simplicity
+   - For production use, implement proper session management
 
 ## License
 
